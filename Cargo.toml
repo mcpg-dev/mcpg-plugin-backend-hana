@@ -1,0 +1,57 @@
+[package]
+name = "mcpg-plugin-backend-hana"
+version = "0.1.0-alpha.15"
+license = "Apache-2.0"
+edition = "2024"
+description = """
+SAP HANA backend binding plugin for mcpg. Runs an operator-fixed SQL statement
+against a SAP HANA database over its native HDB SQL protocol and returns rows as
+JSON. The statement uses `?` positional placeholders bound from `params` — an
+ordered list of CEL expressions evaluated against the tool arguments. Values are
+bound as server-side prepared-statement parameters (never string-interpolated),
+so caller input cannot alter the statement (injection-safe). A read-only keyword
+guard fences the statement. The driver is `hdbconnect_async` — a pure-Rust HANA
+driver with rustls TLS (no native-tls / OpenSSL) and a bb8 connection pool.
+Complements the `sql`, `oracle`, `mssql`, `snowflake`, `clickhouse` and
+`duckdb` backends.
+"""
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = []
+cdylib-export = []
+static-firstparty = []
+# Gates the live-HANA end-to-end suite so plain `cargo test` stays fast (the
+# unit tests never touch the network). HANA Express is license-locked (no
+# testcontainer), so the integration suite is env-gated: it reads HANA_TEST_*
+# from the environment and SKIPS when unset. Run:
+# `cargo test -p mcpg-plugin-backend-hana --features integration-tests \
+#   --test integration -- --test-threads 1`.
+integration-tests = []
+
+[dependencies]
+mcpg-plugin-protocol = { git = "https://github.com/mcpg-dev/mcpg-plugin-protocol", tag = "v0.1.0-beta.13", version = "=0.1.0-beta.13" }
+mcpg-plugin-sdk      = { git = "https://github.com/mcpg-dev/mcpg-plugin-sdk", tag = "v0.1.0-beta.13", version = "=0.1.0-beta.13", features = ["static-firstparty"] }
+mcpg-plugin-host     = { git = "https://github.com/mcpg-dev/mcpg-plugin-host", tag = "v0.1.0-beta.13", version = "=0.1.0-beta.13" }
+async-trait    = "0.1"
+base64         = "0.22"
+# CEL for computed query parameters (mirrors the sql/oracle/duckdb/clickhouse backends).
+cel            = "0.13"
+chrono         = { version = "0.4", features = ["clock"] }
+metrics        = "0.24"
+# Pure-Rust SAP HANA driver (native HDB SQL protocol). `bb8_pool` pulls the
+# async bb8 connection-pool manager (+ tokio + log). TLS is rustls 0.23 +
+# rustls-webpki, a hard dependency of `hdbconnect_impl` — there is no
+# native-tls / OpenSSL anywhere in the tree.
+hdbconnect_async = { version = "0.32", features = ["bb8_pool"] }
+bb8            = "0.9"
+serde          = { version = "1", features = ["derive"] }
+serde_json     = "1"
+tokio          = { version = "1", features = ["sync", "rt", "rt-multi-thread", "macros", "time"] }
+tracing        = "0.1"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt", "rt-multi-thread", "time"] }
+async-trait = "0.1"

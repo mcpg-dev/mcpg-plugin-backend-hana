@@ -1,0 +1,53 @@
+schema: mcpg.dev/plugin/v1
+id: dev.mcpg.backend.hana
+name: SAP HANA Binding
+license: Apache-2.0
+description: |
+  Runs an operator-fixed SQL statement against a SAP HANA database over its
+  native HDB SQL protocol and returns rows as JSON. The statement uses `?`
+  positional placeholders bound from `params` — an ordered list of CEL
+  expressions evaluated against the tool arguments. Values are bound as
+  server-side prepared-statement parameters (never raw string-interpolated),
+  so caller input cannot alter the statement (injection-safe). A read-only
+  keyword guard (SELECT / WITH / CALL-free) fences the statement. Auth is the
+  HANA dbuser + password (the password resolved from `${cred://…}` at config
+  load). TLS is pure-Rust rustls (no native-tls / OpenSSL); the driver is
+  `hdbconnect_async`. A lazy bb8 connection pool opens no socket until the
+  first call, so registration stays offline.
+
+  Two introspection operations let an agent discover the schema without writing
+  SQL. Set `operation: list_tables` to select from HANA's `SYS.TABLES` (returns
+  SCHEMA_NAME / TABLE_NAME / TABLE_TYPE) or `operation: list_columns` to select
+  from `SYS.TABLE_COLUMNS` (SCHEMA_NAME / TABLE_NAME / COLUMN_NAME /
+  DATA_TYPE_NAME / LENGTH / IS_NULLABLE / POSITION). Schema / table / type /
+  column filters may be pinned statically or supplied per call via `*_arg`
+  tool-argument names; every filter is BOUND as a `?` parameter (the SQL
+  skeleton carries only fixed `SYS.*` column names — never interpolated), so
+  caller input can only narrow the metadata. The catalog operations are
+  inherently read-only and ignore `query` / `params` / `read_only`.
+
+  A `surface: resource` binding placed under `resource_templates[]` (with a
+  `uri_template` like `hana://orders/{id}`) may set `read_query` — an
+  operator-fixed single-row read whose `?` placeholders are bound from `params`.
+  On a `resources/read` of a concrete URI the gateway pre-extracts each `{var}`
+  into `arguments.<var>`; `params: ["arguments.id"]` binds the extracted value
+  SERVER-SIDE as a prepared-statement parameter (never interpolated), and the
+  matched row is returned as the `resources/read` `{contents:[…]}` body. The
+  `read_query` is held to the same read-only keyword guard as `query`.
+
+  A second `watch_strategy` entity (kind `hana_poll`) lets a resource subscribe
+  to HANA changes by POLLING. Each watcher carries its own connection (`host` /
+  `port` / `user` / `password` / `database` / `use_tls` / `tls_verify_peer` /
+  `tls_ca_cert`) plus a read-only scalar high-water `tracking_query` (e.g.
+  `SELECT max(UPDATED_AT) FROM EVENTS`). The plugin runs that query every
+  `interval_ms` (default 60000, floored at 250 ms) with a per-tick `timeout_ms`
+  budget (default 10000), and emits `notifications/resources/updated` whenever
+  the scalar advances past the previously-seen value (the first tick only
+  establishes the baseline, so a watcher never fires spuriously at startup). The
+  `tracking_query` is held to the same read-only keyword guard (SELECT / WITH)
+  as the backend statement; an empty or non-read-only query is rejected at watch
+  start.
+class: backend
+runtime: native-cdylib-v1
+protocol_version: "1.0"
+required_capabilities: [network_outbound]
