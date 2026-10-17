@@ -110,6 +110,7 @@ impl HanaWatchCdylib {
     /// carries no plugin-level config (the connection + `tracking_query` arrive
     /// via the per-watch spec).
     pub fn from_host_config(_config_json: &str, _host: HostHandle) -> Self {
+        crate::install_crypto_provider();
         Self {
             manifest: firstparty_manifest! {
                 id: "dev.mcpg.backend.hana",
@@ -261,6 +262,12 @@ mod tests {
 
     fn plugin() -> HanaWatchCdylib {
         HanaWatchCdylib::from_host_config("", stub_host())
+    }
+
+    #[test]
+    fn a_tls_configuration_can_be_built_once_the_plugin_is_made() {
+        let _ = plugin();
+        let _ = rustls::ClientConfig::builder();
     }
 
     fn emit_noop() -> Box<dyn Fn(&str) + Send + Sync + 'static> {

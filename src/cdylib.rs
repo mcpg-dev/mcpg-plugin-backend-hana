@@ -45,6 +45,7 @@ impl HanaBackendCdylib {
     /// plugin-level config (per-binding host / query arrive via
     /// `register_profile`).
     pub fn from_host_config(_config_json: &str, host: HostHandle) -> Self {
+        crate::install_crypto_provider();
         let inner = HanaBackendPlugin::new();
         let _installed = inner.set_host_handle(host.clone());
         Self {

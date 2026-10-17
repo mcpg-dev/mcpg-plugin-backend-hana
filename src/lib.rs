@@ -31,6 +31,17 @@ use serde_json::{Value, json};
 use tokio::sync::RwLock;
 use tracing::debug;
 
+/// Install the crypto provider rustls builds TLS configurations from: a
+/// build that links both rustls providers has no default, hdbconnect builds
+/// its TLS configuration from it, and this cdylib's copy of rustls does not
+/// see the host's.
+pub(crate) fn install_crypto_provider() {
+    static INSTALL: std::sync::Once = std::sync::Once::new();
+    INSTALL.call_once(|| {
+        let _ = rustls::crypto::ring::default_provider().install_default();
+    });
+}
+
 #[cfg(any(feature = "cdylib-export", feature = "static-firstparty"))]
 mod cdylib;
 mod engine;
